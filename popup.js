@@ -68,9 +68,113 @@ document.getElementById('save-btn').addEventListener('click', () => {
     });
 });
 
+
+// 读取 WebDAV 文件
+async function readWebDAVFile(url, username, password, filePath) {
+    try {
+        const response = await axios.get(`${url}${filePath}`, {
+            auth: { username, password },
+            responseType: "arraybuffer",
+        });
+        return response.data; // 返回文件内容
+    } catch (error) {
+        console.error("更新文件失败：", error.response ? error.response.status || error.message : error.message);
+        return null;
+    }
+}
+
+// 修改 WebDAV 文件
+async function updateWebDAVFile(url, username, password, filePath, data) {
+    try {
+        const response = await axios.put(`${url}${filePath}`, data, {
+            auth: { username, password },
+        });
+        console.log("文件更新成功！");
+        return true;
+    } catch (error) {
+        console.error("更新文件失败：", error.response ? error.response.status || error.message : error.message);
+        return false;
+    }
+}
+
+// 获取文件列表
+async function listFiles(url, username, password, path = "") {
+    try {
+        const response = await axios.request({
+            method: "PROPFIND",
+            url: `${url}${path}`,
+            auth: { username: username, password: password },
+        });
+        console.log("文件列表：", response.data);
+    } catch (error) {
+        console.error("请求失败：", error.response.status);
+    }
+}
+
 // 测试按钮
 document.getElementById('test-btn').addEventListener('click', () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'test' });
+    chrome.tabs.query({ active: true, currentWindow: true }, async(tabs) => {
+        console.log("test");
+        //  console.log("a", axios);
+        //  console.log("b", XLSX);
+        const result = await chrome.storage.local.get('webdavConfig');
+        const { url, username, password } = result.webdavConfig || {};
+        if (!url || !username || !password) {
+            console.error("未配置 WebDAV，请先设置 WebDAV 信息！");
+            sendResponse({ error: "未配置 WebDAV" });
+            return;
+        }
+
+        const FILE_PATH = "PWsync/pw.xls"; // WebDAV 中的文件路径
+        const fileContent = "test";
+
+        const success = await updateWebDAVFile(url, username, password, FILE_PATH, fileContent);
+        console.log("success", success);
+
+
+        return;
+        // chrome.tabs.sendMessage(tabs[0].id, { action: 'test' });
+        chrome.tabs.sendMessage(tabs[0].id, { action: "test" }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("Error:", chrome.runtime.lastError);
+            } else {
+                console.log("Response:", response);
+            }
+        });
     });
 });
+
+const dbName = "WebDAVFileStorage";
+const storeName = "files";
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(storeName)) {
+                db.createObjectStore(storeName, { keyPath: "path" });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function saveFileToDB(path, data) {
+    const db = await openDB();
+    const transaction = db.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    store.put({ path, data });
+}
+
+async function getFileFromDB(path) {
+    const db = await openDB();
+    const transaction = db.transaction(storeName, "readonly");
+    const store = transaction.objectStore(storeName);
+    return new Promise((resolve, reject) => {
+        const request = store.get(path);
+        request.onsuccess = () => resolve(request.result ? request.result.data : null);
+        request.onerror = () => reject(request.error);
+    });
+}

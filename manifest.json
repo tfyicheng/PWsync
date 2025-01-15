@@ -3,7 +3,7 @@
     "name": "PWsync",
     "version": "1.0",
     "description": "webdev密码同步工具",
-    "permissions": ["activeTab", "storage", "scripting", "contextMenus"],
+    "permissions": ["tabs", "activeTab", "storage", "scripting", "contextMenus"],
     "host_permissions": [""],
     "background": {
         "service_worker": "background.js"
@@ -17,8 +17,8 @@
         }
     },
     "content_scripts": [{
-        "matches": ["http://example.com/*"],
-        "js": ["lib/axios.min.js", "lib/xlsx.full.min.js", "content.js"]
+        "matches": ["<all_urls>", "http://*/*", "https://*/*"],
+        "js": ["content.js", "lib/axios.min.js", "lib/xlsx.full.min.js"]
     }],
     "web_accessible_resources": [{
         "resources": ["config/config.html", "lib/*"],

@@ -2,6 +2,11 @@
 importScripts("./lib/axios.min.js");
 importScripts("./lib/xlsx.full.min.js");
 
+// chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+//     console.log("Message received in content script:", message);
+//     sendResponse({ status: "success" });
+// });
+
 // 监听消息
 chrome.runtime.onMessage.addListener(async(request, sender, sendResponse) => {
     // 从 chrome.storage.local 中读取 WebDAV 配置
@@ -37,7 +42,9 @@ chrome.runtime.onMessage.addListener(async(request, sender, sendResponse) => {
         const success = await updateWebDAVFile(url, username, password, FILE_PATH, fileContent);
         sendResponse({ success });
     } else if (request.action === 'test') {
-        console.log("test")
+        console.log("a", axios);
+        console.log("b", XLSX);
+        sendResponse({ status: "success" });
     }
 });
 
