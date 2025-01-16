@@ -1,11 +1,8 @@
 // 引入本地库文件
-importScripts("./lib/axios.min.js");
-importScripts("./lib/xlsx.full.min.js");
+//importScripts("./lib/axios.min.js");
+//importScripts("./lib/xlsx.full.min.js");
 
-// chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-//     console.log("Message received in content script:", message);
-//     sendResponse({ status: "success" });
-// });
+console.log("Content script loaded!");
 
 // 监听消息
 chrome.runtime.onMessage.addListener(async(request, sender, sendResponse) => {
@@ -19,7 +16,7 @@ chrome.runtime.onMessage.addListener(async(request, sender, sendResponse) => {
     }
 
     const FILE_PATH = "PWsync/pw.xls"; // WebDAV 中的文件路径
-
+    console.log("request", request);
     if (request.action === 'getData') {
         // 读取 WebDAV 文件
         const fileContent = await readWebDAVFile(url, username, password, FILE_PATH);
@@ -31,7 +28,8 @@ chrome.runtime.onMessage.addListener(async(request, sender, sendResponse) => {
             const data = XLSX.utils.sheet_to_json(sheet); // 将表格数据转换为 JSON
             sendResponse({ data });
         } else {
-            sendResponse({ data: [] });
+            //  sendResponse({ data: [] });
+            sendResponse({ data: "22" });
         }
     } else if (request.action === 'saveData') {
         // 将数据保存到 WebDAV 文件
@@ -41,9 +39,21 @@ chrome.runtime.onMessage.addListener(async(request, sender, sendResponse) => {
         const fileContent = XLSX.write(workbook, { type: 'buffer', bookType: 'xls' });
         const success = await updateWebDAVFile(url, username, password, FILE_PATH, fileContent);
         sendResponse({ success });
+    } else if (message.action === "fillCredentials") {
+        // 查找账号输入框和密码输入框
+        const usernameInput = document.querySelector('input[type="text"], input[type="email"]');
+        const passwordInput = document.querySelector('input[type="password"]');
+
+        // 填充账号密码
+        if (usernameInput && passwordInput) {
+            usernameInput.value = message.username;
+            passwordInput.value = message.password;
+            console.log("账号密码已填充。");
+        } else {
+            console.error("未找到账号或密码输入框。");
+        }
     } else if (request.action === 'test') {
-        console.log("a", axios);
-        console.log("b", XLSX);
+        alert('请先配置加密密钥！');
         sendResponse({ status: "success" });
     }
 });
@@ -57,7 +67,7 @@ async function readWebDAVFile(url, username, password, filePath) {
         });
         return response.data; // 返回文件内容
     } catch (error) {
-        console.error("读取文件失败：", error.response ? .status || error.message);
+        console.error("读取文件失败：", error.response ? error.response.status || error.message : error.message);
         return null;
     }
 }
@@ -71,7 +81,7 @@ async function updateWebDAVFile(url, username, password, filePath, data) {
         console.log("文件更新成功！");
         return true;
     } catch (error) {
-        console.error("更新文件失败：", error.response ? .status || error.message);
+        console.error("更新文件失败：", error.response ? error.response.status || error.message : error.message);
         return false;
     }
 }
