@@ -49,13 +49,16 @@ chrome.runtime.onMessage.addListener(async(request, sender, sendResponse) => {
             usernameInput.value = message.username;
             passwordInput.value = message.password;
             console.log("账号密码已填充。");
+            sendResponse({ status: "success" });
         } else {
             console.error("未找到账号或密码输入框。");
+            sendResponse({ status: "failed", error: "未找到输入框" });
         }
     } else if (request.action === 'test') {
         alert('请先配置加密密钥！');
         sendResponse({ status: "success" });
     }
+    return true; // 保持消息端口打开，以便异步发送响应
 });
 
 // 读取 WebDAV 文件

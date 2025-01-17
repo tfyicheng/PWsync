@@ -1,26 +1,58 @@
 // 检查是否已配置 WebDAV
 chrome.storage.local.get('webdavConfig', (result) => {
-    init();
     if (!result.webdavConfig) {
         // 如果未配置 WebDAV，跳转到配置页面
         chrome.tabs.create({ url: chrome.runtime.getURL('config/config.html') });
     }
+    init();
+    getData();
 });
 
 async function init() {
     // 获取当前网页的 URL
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const currentUrl = new URL(tab.url).hostname; // 获取当前网页的域名
-    const wedurl = document.querySelector('#url');
+    const wedurl = document.querySelector('#curl');
+    const link = document.querySelector('#clink');
     if (wedurl) {
         wedurl.value = currentUrl;
     }
+    if (link) {
+        link.value = tab.url;
+    }
 }
 
+const csvPath = "/accounts.csv";
 
-// 刷新数据
-document.getElementById('refresh-btn').addEventListener('click', () => {
-    loadCSVFile("/accounts.csv").then(async(csvData) => {
+//初始化文件 //name域名 url完整链接 username password
+function initCSV() {
+    const csvData = `name,url,username,password`;
+    saveFileToDB(csvPath, csvData);
+}
+
+//错误提示
+function error(msg) {
+    const tip = document.querySelector('#tip');
+    if (tip) {
+        tip.innerText = msg;
+        tip.style.color = "red";
+    }
+    console.error(msg);
+}
+
+//成功提示
+function success(msg) {
+    const tip = document.querySelector('#tip');
+    if (tip) {
+        tip.innerText = msg;
+        tip.style.color = "green";
+    }
+    console.log(msg);
+}
+
+//初始化获取数据
+function getData() {
+    loadCSVFile(csvPath).then(async(csvData) => {
         if (csvData) {
             const accounts = parseCSV(csvData);
             // 获取当前网页的 URL
@@ -28,9 +60,9 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
             const currentUrl = new URL(tab.url).hostname; // 获取当前网页的域名
 
             // 查找匹配的账号密码
-            const account = accounts.find((acc) => acc.Website === currentUrl);
+            const account = accounts.find((acc) => acc.name === currentUrl);
             if (!account) {
-                console.error("未找到匹配的账号密码。");
+                error("未找到匹配的账号密码。");
                 return;
             }
             console.log("解析后的账号数据：", account);
@@ -38,19 +70,32 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
             const passwordInput = document.querySelector('#cpw');
 
             if (!usernameInput || !passwordInput) {
-                console.error("未找到账号密码输入框。");
+                error("未找到账号密码输入框。");
                 return;
             }
 
             usernameInput.value = account.username;
             passwordInput.value = account.password;
 
+            success("已获取账号密码");
 
         } else {
-            console.error("无法读取 CSV 文件。");
+            error("无法读取 CSV 文件。");
+            //没有文件初始化文件
+            initCSV();
         }
     });
+}
 
+// 打开配置页面
+document.getElementById('set-btn').addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('config/config.html') });
+});
+
+
+// 刷新数据
+document.getElementById('refresh-btn').addEventListener('click', () => {
+    getData();
     return;
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         chrome.tabs.sendMessage(tabs[0].id, { action: 'getData' }, (response) => {
@@ -80,7 +125,50 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
 });
 
 // 保存数据
-document.getElementById('save-btn').addEventListener('click', () => {
+document.getElementById('save-btn').addEventListener('click', async() => {
+    const link = document.querySelector('#clink');
+    const urlInput = document.querySelector('#curl');
+    const usernameInput = document.querySelector('#cname');
+    const passwordInput = document.querySelector('#cpw');
+    if (link.value && urlInput.value && usernameInput.value && passwordInput.value) {
+        const newData = `${urlInput.value},${link.value},${usernameInput.value},${passwordInput.value}`;
+        // appendDataToCSV(csvPath, newData)
+        //     .then(() => success("数据已保存"))
+        //     .catch((error) => error("数据保存失败：" + error.message));
+
+        try {
+            // 追加数据到 CSV
+            await appendDataToCSV(csvPath, newData);
+
+            // 从 IndexedDB 读取更新后的 CSV 数据
+            const updatedCSVData = await getFileFromDB(csvPath);
+
+
+            const result = await chrome.storage.local.get('webdavConfig');
+            const { url, username, password } = result.webdavConfig || {};
+            if (!url || !username || !password) {
+                console.error("未配置 WebDAV，请先设置 WebDAV 信息！");
+                return;
+            }
+
+            const FILE_PATH = "PWsync/pw.csv"; // WebDAV 中的文件路径
+
+
+            const success = await updateWebDAVFile(url, username, password, FILE_PATH, updatedCSVData);
+            if (success) {
+                console.log("数据已保存到 WebDAV。");
+            } else {
+                console.error("数据保存到 WebDAV 失败。");
+            }
+        } catch (error) {
+            console.error("数据保存失败：" + error.message);
+        }
+
+    } else {
+        error("数据保存失败：缺少url或其他信息");
+    }
+
+    return;
     const inputs = document.querySelectorAll('#data-container input');
     const data = [];
     for (let i = 0; i < inputs.length; i += 3) {
@@ -105,8 +193,15 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
 // 读取 CSV 文件并填充账号密码
 document.getElementById("fill-credentials").addEventListener("click", async() => {
+    // 获取当前激活的标签页
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+        console.error("未找到激活的标签页。");
+        return;
+    }
+
     // 读取 CSV 文件
-    const csvData = await loadCSVFile("/accounts.csv");
+    const csvData = await loadCSVFile(csvPath);
     if (!csvData) {
         console.error("无法读取 CSV 文件。");
         return;
@@ -131,7 +226,7 @@ document.getElementById("fill-credentials").addEventListener("click", async() =>
     const passwordInput = document.querySelector('#cpw');
 
     if (!usernameInput || !passwordInput) {
-        console.error("未找到账号密码输入框。");
+        error("未找到账号密码输入框。");
         return;
     }
 
@@ -179,6 +274,40 @@ document.getElementById('test-btn').addEventListener('click', () => {
     });
 });
 
+// 导出按钮点击事件
+document.getElementById("export-btn").addEventListener("click", async() => {
+    // 向后台脚本请求 CSV 数据
+    chrome.runtime.sendMessage({ action: "getCSVData" },
+        async(response) => {
+            if (response.status === "success") {
+                const csvData = response.data;
+
+                try {
+                    // 使用 File System Access API 保存文件
+                    const blob = new Blob([csvData], { type: "text/csv" });
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: "data.csv", // 默认文件名,
+                        types: [{
+                            description: "CSV Files",
+                            accept: { "text/csv": [".csv"] },
+                        }, ],
+                    });
+
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+
+                    alert("导出成功！");
+                } catch (error) {
+                    alert("导出失败：" + error.message);
+                }
+            } else {
+                alert("导出失败：" + response.error);
+            }
+        }
+    );
+});
+
 //#region 加密解密
 
 // 加密函数
@@ -195,6 +324,23 @@ function decryptData(encryptedData, key) {
 //#endregion
 
 //#region  WebDAV 操作
+
+//创建目录
+async function createParentDirectory(url, username, password, path) {
+    const parentPath = path.split("/").slice(0, -1).join("/"); // 获取父目录路径
+    try {
+        const response = await axios.request({
+            method: "MKCOL",
+            url: `${url}${parentPath}`,
+            auth: { username, password },
+        });
+        console.log("父目录创建成功：", parentPath);
+        return true;
+    } catch (error) {
+        console.error("父目录创建失败：", error.response ? error.response.status || error.message : error.message);
+        return false;
+    }
+}
 
 // 读取 WebDAV 文件
 async function readWebDAVFile(url, username, password, filePath) {
@@ -213,6 +359,9 @@ async function readWebDAVFile(url, username, password, filePath) {
 // 修改 WebDAV 文件
 async function updateWebDAVFile(url, username, password, filePath, data) {
     try {
+        // 检查并创建父目录
+        await createParentDirectory(url, username, password, filePath);
+
         const response = await axios.put(`${url}${filePath}`, data, {
             auth: { username, password },
         });
@@ -264,6 +413,7 @@ async function saveFileToDB(path, data) {
     const transaction = db.transaction(storeName, "readwrite");
     const store = transaction.objectStore(storeName);
     store.put({ path, data });
+    console.log("文件已保存到 IndexedDB");
 }
 
 async function getFileFromDB(path) {
@@ -275,6 +425,57 @@ async function getFileFromDB(path) {
         request.onsuccess = () => resolve(request.result ? request.result.data : null);
         request.onerror = () => reject(request.error);
     });
+}
+
+async function appendDataToCSV(path, newData) {
+    try {
+        // 从 IndexedDB 中读取 CSV 数据
+        const csvData = await getFileFromDB(path);
+        if (!csvData) {
+            throw new Error("无法读取 CSV 文件。");
+        }
+
+        // 解析 CSV 数据
+        const rows = csvData.split("\n");
+        const headers = rows[0].split(","); // 第一行为表头
+        const data = rows.slice(1).map((row) => {
+            const values = row.split(",");
+            return headers.reduce((obj, header, index) => {
+                obj[header] = values[index];
+                return obj;
+            }, {});
+        });
+
+        // 解析新数据
+        const newValues = newData.split(",");
+        const newRow = headers.reduce((obj, header, index) => {
+            obj[header] = newValues[index];
+            return obj;
+        }, {});
+
+        // 查找是否已存在相同 name 的数据
+        const existingIndex = data.findIndex((row) => row.name === newRow.name);
+
+        if (existingIndex !== -1) {
+            // 如果存在，更新数据
+            data[existingIndex] = newRow;
+        } else {
+            // 如果不存在，追加新数据
+            data.push(newRow);
+        }
+
+        // 将数据转换回 CSV 格式
+        const updatedCSVData = [
+            headers.join(","), // 表头
+            ...data.map((row) => headers.map((header) => row[header]).join(",")), // 数据行
+        ].join("\n");
+
+        // 保存更新后的 CSV 数据回 IndexedDB
+        await saveFileToDB(path, updatedCSVData);
+        console.log("数据已更新并保存。");
+    } catch (error) {
+        console.error("数据更新失败：", error);
+    }
 }
 
 //#endregion

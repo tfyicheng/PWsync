@@ -3,7 +3,7 @@
     "name": "PWsync",
     "version": "1.0",
     "description": "webdev密码同步工具",
-    "permissions": ["activeTab", "storage", "scripting", "contextMenus"],
+    "permissions": ["activeTab", "storage", "scripting", "contextMenus", "fileSystem", "fileSystem.write"],
     "host_permissions": ["<all_urls>"],
     "background": {
         "service_worker": "background.js"
