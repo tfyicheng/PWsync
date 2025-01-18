@@ -21,8 +21,9 @@ async function init() {
         link.value = tab.url;
     }
 }
+const FILE_PATH = "PWsync/pw.csv"; // WebDAV 中的文件路径
 
-const csvPath = "/accounts.csv";
+const csvPath = "/accounts.csv"; // 本地数据路径
 
 //初始化文件 //name域名 url完整链接 username password
 function initCSV() {
@@ -38,6 +39,7 @@ function error(msg) {
         tip.style.color = "red";
     }
     console.error(msg);
+    logMessage(`[错误] ${msg}`);
 }
 
 //成功提示
@@ -48,43 +50,105 @@ function success(msg) {
         tip.style.color = "green";
     }
     console.log(msg);
+    logMessage(`[成功] ${msg}`);
 }
 
+// 日志记录
+function logMessage(message) {
+    const logContainer = document.getElementById("log-container");
+    if (logContainer) {
+        const logEntry = document.createElement("div");
+        logEntry.textContent = message;
+        logContainer.appendChild(logEntry);
+        logContainer.scrollTop = logContainer.scrollHeight; // 自动滚动到底部
+    }
+}
+
+function openTab(evt, tabName) {
+    var i, tabcontent, tablinks;
+    tabcontent = document.getElementsByClassName("tabcontent");
+    for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+    }
+    tablinks = document.getElementsByClassName("tab");
+    for (i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+    }
+    document.getElementById(tabName).style.display = "block";
+    evt.currentTarget.className += " active";
+}
+
+
+
+// 默认打开日志 Tab
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelector(".tablinks").click(); // 默认打开第一个 Tab
+});
+
 //初始化获取数据
-function getData() {
-    loadCSVFile(csvPath).then(async(csvData) => {
-        if (csvData) {
-            const accounts = parseCSV(csvData);
-            // 获取当前网页的 URL
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            const currentUrl = new URL(tab.url).hostname; // 获取当前网页的域名
+async function getData() {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const currentUrl = new URL(tab.url).hostname;
+        if (currentUrl == "extensions") return;
 
-            // 查找匹配的账号密码
-            const account = accounts.find((acc) => acc.name === currentUrl);
-            if (!account) {
-                error("未找到匹配的账号密码。");
-                return;
-            }
-            console.log("解析后的账号数据：", account);
-            const usernameInput = document.querySelector('#cname');
-            const passwordInput = document.querySelector('#cpw');
 
-            if (!usernameInput || !passwordInput) {
-                error("未找到账号密码输入框。");
-                return;
-            }
-
-            usernameInput.value = account.username;
-            passwordInput.value = account.password;
-
-            success("已获取账号密码");
-
-        } else {
-            error("无法读取 CSV 文件。");
-            //没有文件初始化文件
-            initCSV();
+        const result = await chrome.storage.local.get('webdavConfig');
+        const { url, username, password } = result.webdavConfig || {};
+        if (!url || !username || !password) {
+            console.error("未配置 WebDAV，请先设置 WebDAV 信息！");
+            return;
         }
-    });
+        const cloudData = await readWebDAVFile(url, username, password, FILE_PATH);
+        if (!cloudData) {
+            error("无法从云端拉取 CSV 数据。");
+            return;
+        }
+
+        // 确保 cloudData 是字符串
+        if (typeof cloudData !== "string") {
+            error("从云端拉取的数据格式不正确。");
+            return;
+        }
+
+        const cloudAccounts = parseCSV(cloudData);
+        const localData = await loadCSVFile(csvPath);
+        let localAccounts = [];
+        if (localData) {
+            localAccounts = parseCSV(localData);
+        } else {
+            error("本地无 CSV 文件，初始化新文件。");
+            await initCSV();
+        }
+
+        const updatedAccounts = mergeAccounts(cloudAccounts, localAccounts);
+        const updatedCSVData = stringifyCSV(updatedAccounts);
+        await saveFileToDB(csvPath, updatedCSVData);
+
+        success("数据同步完成。");
+
+        const account = updatedAccounts.find((acc) => acc.name === currentUrl);
+        if (!account) {
+            error("未找到匹配的账号密码。");
+            return;
+        }
+
+        const usernameInput = document.querySelector('#cname');
+        const passwordInput = document.querySelector('#cpw');
+
+        if (!usernameInput || !passwordInput) {
+            error("未找到账号密码输入框。");
+            return;
+        }
+
+        usernameInput.value = account.username;
+        passwordInput.value = account.password;
+
+        success("已获取账号密码");
+
+    } catch (error) {
+        console.log("初始化获取数据失败：" + error.message);
+    }
 }
 
 // 打开配置页面
@@ -151,7 +215,7 @@ document.getElementById('save-btn').addEventListener('click', async() => {
                 return;
             }
 
-            const FILE_PATH = "PWsync/pw.csv"; // WebDAV 中的文件路径
+
 
 
             const success = await updateWebDAVFile(url, username, password, FILE_PATH, updatedCSVData);
@@ -349,7 +413,12 @@ async function readWebDAVFile(url, username, password, filePath) {
             auth: { username, password },
             responseType: "arraybuffer",
         });
-        return response.data; // 返回文件内容
+        // return response.data; // 返回文件内容
+
+        // 将 ArrayBuffer 转换为字符串
+        const decoder = new TextDecoder("utf-8");
+        const csvData = decoder.decode(response.data);
+        return csvData;
     } catch (error) {
         console.error("更新文件失败：", error.response ? error.response.status || error.message : error.message);
         return null;
@@ -507,6 +576,30 @@ function parseCSV(csvData) {
     });
     return data;
 }
+
+// 合并云端和本地数据
+function mergeAccounts(cloudAccounts, localAccounts) {
+    const mergedAccounts = [...localAccounts];
+
+    cloudAccounts.forEach((cloudAccount) => {
+        const existingIndex = mergedAccounts.findIndex((localAccount) => localAccount.name === cloudAccount.name);
+        if (existingIndex !== -1) {
+            mergedAccounts[existingIndex] = cloudAccount;
+        } else {
+            mergedAccounts.push(cloudAccount);
+        }
+    });
+
+    return mergedAccounts;
+}
+
+// 将数据转换回 CSV 格式
+function stringifyCSV(data) {
+    const headers = Object.keys(data[0]);
+    const rows = data.map((item) => headers.map((header) => item[header]).join(","));
+    return [headers.join(","), ...rows].join("\n");
+}
+
 
 // 示例：读取并解析 CSV 文件
 // loadCSVFile("/accounts.csv").then((csvData) => {
