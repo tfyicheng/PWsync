@@ -6,19 +6,52 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            padding: 10px;
+            /* padding: 10px; */
             width: 300px;
+            margin: 0;
         }
         
-        input,
-        button {
-            margin: 5px 0;
+        #data-container .label {
+            display: inline-block;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        
+        #data-container .label label {
+            width: 50px;
+            display: inline-block;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        #data-container .label input {
+            width: 79%;
+            border: none;
+            border-bottom: 1px solid #ccc;
+            height: 20px;
+        }
+        
+        #data-container .label input:focus {
+            outline: none;
         }
         
         .tab {
             overflow: hidden;
-            border: 1px solid #ccc;
-            background-color: #f1f1f1;
+            /* border: 1px solid #ccc; */
+            /* background-color: #f1f1f1; */
+            display: flex;
+            align-items: flex-end;
+            height: 2.2rem;
+            width: 100%;
+            border-bottom: 1px solid #ccc;
+        }
+        
+        .tablinks {
+            color: gray;
+        }
+        
+        button {
+            cursor: pointer;
         }
         
         .tab button {
@@ -27,54 +60,103 @@
             border: none;
             outline: none;
             cursor: pointer;
-            padding: 10px 16px;
+            /* padding: 10px 16px; */
             transition: 0.3s;
         }
         
         .tab button:hover {
-            background-color: #ddd;
+            /* background-color: #ddd; */
         }
         
         .tab button.active {
-            background-color: #ccc;
+            font-size: 1.5em;
+            color: #0096FF;
         }
         
         .tabcontent {
             display: none;
-            padding: 6px 12px;
-            border: 1px solid #ccc;
+            padding: 12px;
             border-top: none;
+        }
+        
+        .tabcontent button {
+            border: none;
+            margin: 3px;
+            padding: 6px;
+            border-radius: 6px;
+        }
+        
+        .tabcontent button:hover {
+            border: 1px solid #0096FF;
+            color: #0096FF;
+            padding: 5px;
         }
         
         #log-container {
             height: 150px;
             overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            background-color: #f9f9f9;
-        }
-        /* Style the tab */
-        
-        .tab {
-            padding: 10px;
-            border: none;
-            outline: none;
-            cursor: pointer;
-            font-size: 17px;
             background-color: #f1f1f1;
         }
-        /* Style the buttons that are used to open the tab content */
+        /* 日志消息样式 */
         
-        .tab:hover {
-            background-color: #ddd;
+        .log-timestamp {
+            color: #666;
+            font-size: 0.9em;
+            margin-right: 5px;
         }
-        /* Style the tab content */
         
-        .tabcontent {
-            display: none;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-top: none;
+        .log-error {
+            color: red;
+        }
+        
+        .log-success {
+            color: green;
+        }
+        
+        .meun {
+            position: absolute;
+            right: 0;
+            line-height: 2.7rem;
+            margin-right: 5px;
+        }
+        
+        .meun button {
+            background-color: #fff;
+            border: none;
+        }
+        
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 90px;
+            background-color: gray;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+            /* 位置 */
+            position: absolute;
+            z-index: 1;
+            top: 100%;
+            left: 50%;
+            margin-left: -60px;
+            /* 动画效果 */
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .tip {
+            height: 20px;
+            text-align: center;
         }
     </style>
     <script src="lib/crypto-js.min.js"></script>
@@ -84,50 +166,51 @@
 
 <body>
 
-    <div class="tabs">
-        <button class="tab" onclick="openTab(event, 'tab1')">Tab 1</button>
-        <button class="tab" onclick="openTab(event, 'tab2')">Tab 2</button>
+
+    <div class="meun">
+        <button id="export-btn" class="tooltip">
+          <img src="icons/exp.png" alt="导出" width="15" height="15"/>
+          <span class="tooltiptext">导出 CSV</span>
+        </button>
+        <button id="set-btn" class="tooltip"> 
+          <img src="icons/set.png" alt="设置" width="15" height="15"/> 
+          <span class="tooltiptext">设置</span>
+        </button>
     </div>
 
-    <div id="tab1" class="tabcontent">
-        <h3>Tab 1</h3>
-        <p>This is tab 1 content.</p>
-    </div>
-
-    <div id="tab2" class="tabcontent">
-        <h3>Tab 2</h3>
-        <p>This is tab 2 content.</p>
-    </div>
-
-
-    <h3>账号密码管理器</h3>
-    <label id="tip"></label>
-    <div id="data-container">
-        <label>url: <input id="clink" type="text"></label>
-        <label>网站: <input id="curl" type="text"></label>
-        <label>账号: <input id="cname" type="text"></label>
-        <label>密码: <input id="cpw" type="password"></label>
-    </div>
-    <button id="refresh-btn">刷新数据pull</button>
-    <button id="save-btn">保存修改push</button>
-    <button id="fill-credentials">填充apply</button>
-    <button id="test-btn">测试test</button>
-    <button id="set-btn">设置setting</button>
-    <button id="export-btn">导出 CSV</button>
 
     <!-- Tab 切换栏 -->
     <div class="tab">
-        <button class="tablinks" onclick="openTab(event, 'Logs')">日志</button>
-        <button class="tablinks" onclick="openTab(event, 'Settings')">设置</button>
+        <button class="tablinks" data-tab="Settings">PWsync</button>
+        <button class="tablinks" data-tab="Logs">日志</button>
+
     </div>
 
     <!-- 日志记录区域 -->
     <div id="Logs" class="tabcontent">
-        <h4>日志记录</h4>
+        <!-- <h4>日志记录</h4> -->
         <div id="log-container"></div>
     </div>
 
+    <!-- 设置区域 -->
+    <div id="Settings" class="tabcontent">
+        <!-- <h3>账号密码管理器</h3> -->
+        <div class="tip">
+            <label id="tip"></label>
+        </div>
+        <div id="data-container">
+            <div class="label"><label>url: </label><input id="clink" type="text"></div>
+            <div class="label"> <label>网站:</label> <input id="curl" type="text"></div>
+            <div class="label"> <label>账号: </label><input id="cname" type="text"></div>
+            <div class="label"> <label>密码: </label><input id="cpw" type="password"></div>
+        </div>
+        <button id="refresh-btn">刷新数据pull</button>
+        <button id="save-btn">保存修改push</button>
+        <button id="fill-credentials">填充apply</button>
+        <button id="test-btn" style="display: none;">测试test</button>
 
+
+    </div>
 
     <script src="popup.js"></script>
 </body>

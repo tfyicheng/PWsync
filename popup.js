@@ -39,7 +39,7 @@ function error(msg) {
         tip.style.color = "red";
     }
     console.error(msg);
-    logMessage(`[错误] ${msg}`);
+    logMessage(`<span class="log-error">[错误] ${msg}</span>`);
 }
 
 //成功提示
@@ -50,7 +50,7 @@ function success(msg) {
         tip.style.color = "green";
     }
     console.log(msg);
-    logMessage(`[成功] ${msg}`);
+    logMessage(`<span class="log-success">[成功] ${msg}</span>`);
 }
 
 // 日志记录
@@ -58,32 +58,40 @@ function logMessage(message) {
     const logContainer = document.getElementById("log-container");
     if (logContainer) {
         const logEntry = document.createElement("div");
-        logEntry.textContent = message;
+        const timestamp = new Date().toLocaleTimeString(); // 获取当前时间
+        logEntry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> ${message}`;
         logContainer.appendChild(logEntry);
         logContainer.scrollTop = logContainer.scrollHeight; // 自动滚动到底部
     }
 }
 
-function openTab(evt, tabName) {
-    var i, tabcontent, tablinks;
-    tabcontent = document.getElementsByClassName("tabcontent");
-    for (i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].style.display = "none";
-    }
-    tablinks = document.getElementsByClassName("tab");
-    for (i = 0; i < tablinks.length; i++) {
-        tablinks[i].className = tablinks[i].className.replace(" active", "");
-    }
-    document.getElementById(tabName).style.display = "block";
-    evt.currentTarget.className += " active";
-}
-
-
-
 // 默认打开日志 Tab
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".tablinks").click(); // 默认打开第一个 Tab
 });
+
+
+
+// Tab 切换功能
+function openTab(evt, tabName) {
+    const tabcontent = document.querySelectorAll(".tabcontent");
+    tabcontent.forEach((tab) => (tab.style.display = "none"));
+
+    const tablinks = document.querySelectorAll(".tablinks");
+    tablinks.forEach((tab) => tab.classList.remove("active"));
+
+    document.getElementById(tabName).style.display = "block";
+    evt.currentTarget.classList.add("active");
+}
+
+// 绑定 Tab 切换事件
+document.querySelectorAll(".tablinks").forEach((button) => {
+    button.addEventListener("click", (event) => {
+        openTab(event, event.target.dataset.tab);
+    });
+});
+
+
 
 //初始化获取数据
 async function getData() {
@@ -96,7 +104,7 @@ async function getData() {
         const result = await chrome.storage.local.get('webdavConfig');
         const { url, username, password } = result.webdavConfig || {};
         if (!url || !username || !password) {
-            console.error("未配置 WebDAV，请先设置 WebDAV 信息！");
+            error("未配置 WebDAV，请先设置 WebDAV 信息！");
             return;
         }
         const cloudData = await readWebDAVFile(url, username, password, FILE_PATH);
@@ -146,8 +154,8 @@ async function getData() {
 
         success("已获取账号密码");
 
-    } catch (error) {
-        console.log("初始化获取数据失败：" + error.message);
+    } catch (e) {
+        error("初始化获取数据失败：" + e.message);
     }
 }
 
@@ -198,7 +206,7 @@ document.getElementById('save-btn').addEventListener('click', async() => {
         const newData = `${urlInput.value},${link.value},${usernameInput.value},${passwordInput.value}`;
         // appendDataToCSV(csvPath, newData)
         //     .then(() => success("数据已保存"))
-        //     .catch((error) => error("数据保存失败：" + error.message));
+        //     .catch((error) => error("数据保存失败：" + e.message));
 
         try {
             // 追加数据到 CSV
@@ -211,21 +219,21 @@ document.getElementById('save-btn').addEventListener('click', async() => {
             const result = await chrome.storage.local.get('webdavConfig');
             const { url, username, password } = result.webdavConfig || {};
             if (!url || !username || !password) {
-                console.error("未配置 WebDAV，请先设置 WebDAV 信息！");
+                error("未配置 WebDAV，请先设置 WebDAV 信息！");
                 return;
             }
 
 
 
 
-            const success = await updateWebDAVFile(url, username, password, FILE_PATH, updatedCSVData);
-            if (success) {
-                console.log("数据已保存到 WebDAV。");
+            const succe = await updateWebDAVFile(url, username, password, FILE_PATH, updatedCSVData);
+            if (succe) {
+                success("数据已保存到 WebDAV。");
             } else {
-                console.error("数据保存到 WebDAV 失败。");
+                error("数据保存到 WebDAV 失败。");
             }
-        } catch (error) {
-            console.error("数据保存失败：" + error.message);
+        } catch (e) {
+            error("数据保存失败：" + e.message);
         }
 
     } else {
@@ -260,30 +268,16 @@ document.getElementById("fill-credentials").addEventListener("click", async() =>
     // 获取当前激活的标签页
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) {
-        console.error("未找到激活的标签页。");
+        error("未找到激活的标签页。");
         return;
     }
 
     // 读取 CSV 文件
     const csvData = await loadCSVFile(csvPath);
     if (!csvData) {
-        console.error("无法读取 CSV 文件。");
+        error("无法读取 CSV 文件。");
         return;
     }
-
-    // 解析 CSV 文件
-    // const accounts = parseCSV(csvData);
-
-    // // 获取当前网页的 URL
-    // const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    // const currentUrl = new URL(tab.url).hostname; // 获取当前网页的域名
-
-    // // 查找匹配的账号密码
-    // const account = accounts.find((acc) => acc.Website === currentUrl);
-    // if (!account) {
-    //     console.error("未找到匹配的账号密码。");
-    //     return;
-    // }
 
     // 从 popup.html 中获取用户输入的账号密码
     const usernameInput = document.querySelector('#cname');
@@ -302,6 +296,17 @@ document.getElementById("fill-credentials").addEventListener("click", async() =>
         action: "fillCredentials",
         username: username,
         password: password,
+    }, (response) => {
+        // if (chrome.runtime.lastError) {
+        //     error("消息发送失败：", chrome.runtime.lastError);
+        // } else
+        if (response && response.status === "success") {
+            success("账号密码填充成功");
+        } else if (response && response.status === "failed") {
+            error("账号密码填充失败：", response.error);
+        } else {
+            error("未知响应：", response);
+        }
     });
 });
 
@@ -314,7 +319,7 @@ document.getElementById('test-btn').addEventListener('click', () => {
         const result = await chrome.storage.local.get('webdavConfig');
         const { url, username, password } = result.webdavConfig || {};
         if (!url || !username || !password) {
-            console.error("未配置 WebDAV，请先设置 WebDAV 信息！");
+            error("未配置 WebDAV，请先设置 WebDAV 信息！");
             sendResponse({ error: "未配置 WebDAV" });
             return;
         }
@@ -362,8 +367,8 @@ document.getElementById("export-btn").addEventListener("click", async() => {
                     await writable.close();
 
                     alert("导出成功！");
-                } catch (error) {
-                    alert("导出失败：" + error.message);
+                } catch (e) {
+                    error("导出失败：" + e.message);
                 }
             } else {
                 alert("导出失败：" + response.error);
@@ -389,20 +394,45 @@ function decryptData(encryptedData, key) {
 
 //#region  WebDAV 操作
 
-//创建目录
+// 创建目录（如果不存在）
 async function createParentDirectory(url, username, password, path) {
     const parentPath = path.split("/").slice(0, -1).join("/"); // 获取父目录路径
+
     try {
-        const response = await axios.request({
-            method: "MKCOL",
+        // 检查目录是否已经存在
+        const checkResponse = await axios.request({
+            method: "PROPFIND",
             url: `${url}${parentPath}`,
             auth: { username, password },
         });
-        console.log("父目录创建成功：", parentPath);
-        return true;
-    } catch (error) {
-        console.error("父目录创建失败：", error.response ? error.response.status || error.message : error.message);
-        return false;
+
+        // 如果目录存在，直接返回成功
+        if (checkResponse.status === 207) {
+            success("父目录已存在：", parentPath);
+            return true;
+        }
+    } catch (e) {
+        // 如果目录不存在，继续创建
+        if (e.response && (e.response.status === 404 || e.response.status === 405)) {
+            try {
+                const createResponse = await axios.request({
+                    method: "MKCOL",
+                    url: `${url}${parentPath}`,
+                    auth: { username, password },
+                });
+
+                if (createResponse.status === 201) {
+                    success("父目录创建成功：", parentPath);
+                    return true;
+                }
+            } catch (createError) {
+                error("父目录创建失败：", createError.response ? createError.response.status || createError.message : createError.message);
+                return false;
+            }
+        } else {
+            error("检查父目录是否存在时出错：", e.response ? e.response.status || e.message : e.message);
+            return false;
+        }
     }
 }
 
@@ -419,8 +449,8 @@ async function readWebDAVFile(url, username, password, filePath) {
         const decoder = new TextDecoder("utf-8");
         const csvData = decoder.decode(response.data);
         return csvData;
-    } catch (error) {
-        console.error("更新文件失败：", error.response ? error.response.status || error.message : error.message);
+    } catch (e) {
+        error("更新文件失败：", e.response ? e.response.status || e.message : e.message);
         return null;
     }
 }
@@ -434,10 +464,10 @@ async function updateWebDAVFile(url, username, password, filePath, data) {
         const response = await axios.put(`${url}${filePath}`, data, {
             auth: { username, password },
         });
-        console.log("文件更新成功！");
+        success("文件更新成功！");
         return true;
-    } catch (error) {
-        console.error("更新文件失败：", error.response ? error.response.status || error.message : error.message);
+    } catch (e) {
+        error("更新文件失败：", e.response ? e.response.status || e.message : e.message);
         return false;
     }
 }
@@ -451,8 +481,8 @@ async function listFiles(url, username, password, path = "") {
             auth: { username: username, password: password },
         });
         console.log("文件列表：", response.data);
-    } catch (error) {
-        console.error("请求失败：", error.response.status);
+    } catch (e) {
+        console.log("请求失败：", e.response.status);
     }
 }
 
@@ -482,7 +512,7 @@ async function saveFileToDB(path, data) {
     const transaction = db.transaction(storeName, "readwrite");
     const store = transaction.objectStore(storeName);
     store.put({ path, data });
-    console.log("文件已保存到 IndexedDB");
+    success("文件已保存到 IndexedDB");
 }
 
 async function getFileFromDB(path) {
@@ -541,9 +571,9 @@ async function appendDataToCSV(path, newData) {
 
         // 保存更新后的 CSV 数据回 IndexedDB
         await saveFileToDB(path, updatedCSVData);
-        console.log("数据已更新并保存。");
-    } catch (error) {
-        console.error("数据更新失败：", error);
+        success("数据已更新并保存。");
+    } catch (e) {
+        error("数据更新失败：", e);
     }
 }
 
